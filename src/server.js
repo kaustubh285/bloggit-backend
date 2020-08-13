@@ -1,36 +1,83 @@
 import express from "express";
 import bodyParser from "body-parser";
+import { MongoClient } from "mongodb";
 
 const app = express();
 
 app.use(bodyParser.json());
 
-const articleInfo = {
-  "learn-react": {
-    upvotes: 0,
-  },
-  "learn-node": {
-    upvotes: 0,
-  },
-  "my-thoughts-on-resumes": {
-    upvotes: 0,
-  },
-};
+// const articleInfo = {
+//   "learn-react": {
+//     upvotes: 0,
+//     comments: [],
+//   },
+//   "learn-node": {
+//     upvotes: 0,
+//     comments: [],
+//   },
+//   "my-thoughts-on-resumes": {
+//     upvotes: 0,
+//     comments: [],
+//   },
+// };
 
-app.post("/api/:name/upvote", (req, res) => {
-  const articleName = req.params.name;
+app.get("/api/article/:name", async (req, res) => {
+  try {
+    const articleName = req.params.name;
+    const client = await MongoClient.connect("mongodb://127.0.0.1:27017/", {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    const db = client.db("mybloggit");
 
-  articleInfo[articleName].upvotes += 1;
+    const articleInfo = await db
+      .collection("articles")
+      .findOne({ name: articleName });
 
-  res
-    .status(200)
-    .send(
-      `Upvote for ${articleName} is now ${articleInfo[articleName].upvotes}`
-    );
+    res.status(200).json(articleInfo);
+    client.close();
+  } catch (error) {
+    res.status(500).json({ message: "Something went wrong", error });
+  }
 });
 
-// app.get("/hello", (req, res) => res.send("hello!"));
-// app.get("/user/:name", (req, res) => res.send(`hello ${req.params.name}`));
-// app.post("/hello", (req, res) => res.send(`hello ${req.body.name}`));
+app.post("/api/article/:name/upvote", async (req, res) => {
+  const articleName = req.params.name;
 
-app.listen(3001, () => console.log("Listening on post 3001"));
+  const client = await MongoClient.connect("mongodb://127.0.0.1:27017/", {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  });
+
+  const db = client.db("mybloggit");
+
+  const articleInfo = await db
+    .collection("articles")
+    .findOne({ name: articleName });
+
+  await db.collection("articles").updateOne(
+    { name: articleName },
+    {
+      $set: {
+        upvotes: articleInfo.upvotes + 1,
+      },
+    }
+  );
+
+  const updatedArticleInfo = await db
+    .collection("articles")
+    .findOne({ name: articleName });
+
+  res.status(200).json(updatedArticleInfo);
+  client.close();
+});
+
+app.post("/api/article/:name/add-comment", (req, res) => {
+  const { username, text } = req.body;
+  const articleName = req.params.name;
+
+  articleInfo[articleName].comments.push({ username, text });
+  res.status(200).send(articleInfo[articleName]);
+});
+
+app.listen(8001, () => console.log("Listening on post 8001"));
